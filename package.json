@@ -1,0 +1,11 @@
+{
+    "name": "ddottest"
+  , "version": "0.0.1"
+  , "private": true
+  , "engines" : { "node" : "0.6.x" }
+  , "dependencies": {
+      "express" : "2.5.8",
+      "csv" : "0.0.x",
+      "protobuf" : "0.3.x"
+  }
+}
