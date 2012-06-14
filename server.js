@@ -4,9 +4,10 @@ var fs = require('fs');
 var csv = require('csv');
 var express = require('express');
 var Schema = require('protobuf').Schema;
+var StaticData = require('./static-data.js').StaticData;
+var gtfsProcessor = require('./gtfs-table-maker.js');
 
-// XXX var TRIPMAP_FILE = 'trip_id_converter.json';
-// XXX var STOPMAP_FILE = 'stop_id_converter.json';
+var staticData = new StaticData();
 
 var app = express.createServer(express.logger());
 
@@ -42,9 +43,6 @@ app.configure(function () {
 var schema = new Schema(fs.readFileSync('gtfs-realtime.desc'));
 var FeedMessage = schema['transit_realtime.FeedMessage'];
 
-var tripMap = null;
-var stopMap = null;
-
 var serializedFeed = null;
 
 var getEntityId = (function () {
@@ -68,7 +66,6 @@ function getSequence() {
     sequence = 3;
   }
 
-  console.log('Using sequence id: ' + sequence); // XXX
   return sequence;
 }
 
@@ -95,15 +92,14 @@ function createProtobuf(adherence) {
       id: getEntityId(),
       tripUpdate: {
         trip: {
+          // TODO: Why is the trip ID being added as an Array?
           //tripId: tripMap[avlTripId][sequence]
-          tripId: tripMap[avlTripId][sequence][0] // XXX
+          tripId: staticData.tripMap[avlTripId][sequence][0]
         },
         stopTimeUpdate: [{
-          stopId: stopMap[avlStopId],
+          stopId: staticData.stopMap[avlStopId],
           arrival: {
-            // XXX delay: delay
-            delay: 0 // XXX
-            //delay: 3600 // XXX
+            delay: delay
           }
         }]
       }
@@ -117,10 +113,6 @@ function createProtobuf(adherence) {
   .on('end', function (count) {
     // serialize the message
     serializedFeed = FeedMessage.serialize(feedMessage);
-    // XXX
-    //console.log(JSON.stringify(feedMessage));
-    //fs.writeFileSync(JSON_OUT, JSON.stringify(feedMessage, null, '  '));
-    //fs.writeFileSync(PROTOBUF_OUT, serializedFeed);
     console.log('Created GTFS-Realtime data from ' + count + ' rows of AVL data.');
   });
 }
@@ -129,17 +121,37 @@ app.get('/gtfs-realtime/trip-updates', function (req, response) {
   response.send(serializedFeed);
 });
 
+app.get('/gtfs-realtime/trip-updates.json', function (req, response) {
+  if (serializedFeed) {
+    response.send(FeedMessage.parse(new Buffer(serializedFeed)));
+  } else {
+    response.send();
+  }
+});
+
 app.post('/adherence', function (req, response) {
-  console.log('Processing adherence data');
-  createProtobuf(req.body);
+  if (staticData.tripMap && staticData.stopMap) {
+    console.log('Processing adherence data');
+    createProtobuf(req.body);
+    response.send(JSON.stringify({needsStaticData: false}));
+  } else {
+    // Indicate that we need the static AVL data payload
+    response.send(JSON.stringify({needsStaticData: true}));
+  }
+});
+
+app.post('/static-avl/trips', function (req, response) {
+  staticData.setAvlTrips(req.body);
+  response.send();
+});
+
+app.post('/static-avl/stops', function (req, response) {
+  staticData.setAvlStops(req.body);
   response.send();
 });
 
 app.post('/fake-realtime', function (req, response) {
   serializedFeed = FeedMessage.serialize(req.body);
-  // XXX
-  //fs.writeFileSync(JSON_OUT, JSON.stringify(req.body, null, '  '));
-  //fs.writeFileSync(PROTOBUF_OUT, serializedFeed);
   console.log('Using fake GTFS-Realtime data');
   response.send();
 });
@@ -160,18 +172,16 @@ app.post('/post-test', function (req, response) {
 });
 
 function startServer() {
+  // TODO: Check the GTFS location regularly for updates. Rebuild the tables
+  // when we find new GTFS data.
+  gtfsProcessor.makeGtfsTables(function (tables) {
+    staticData.setGtfsTables(tables);
+  });
+
   var port = process.env.PORT || 3000;
   app.listen(port, function () {
     console.log('Listening on ' + port);
   });
 }
 
-// fs.readFile(TRIPMAP_FILE, function (error, data) {
-//   tripMap = JSON.parse(data);
-//   fs.readFile(STOPMAP_FILE, function (error, data) {
-//     stopMap = JSON.parse(data);
-//     //createProtobuf();
-//     startServer();
-//   });
-// });
 startServer();
