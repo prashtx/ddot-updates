@@ -9,7 +9,7 @@ function createTripMap(builder, avlTrips, cb) {
   var goodCount = 0;
   var count = 0;
   csv()
-  .from(avlTrips, {columns: false})
+  .from(avlTrips, {columns: false, trim: true})
   .on('data', function (data, index) {
     count += 1;
     var startNode = data[3].trim();
@@ -33,12 +33,12 @@ function createTripMap(builder, avlTrips, cb) {
 }
 
 // cb(tripMap, error)
-function createStopMap(builder, avlTrips, cb) {
+function createStopMap(builder, avlStop, cb) {
   var stopMap = null;
   var count = 0;
   var badCount = 0;
   csv()
-  .from(avlTrips, {columns: false})
+  .from(avlStop, {columns: false, trim: true})
   .on('data', function (data, index) {
     var avlId = data[0];
     var stopName = data[1].trim().toLocaleLowerCase();
@@ -46,7 +46,7 @@ function createStopMap(builder, avlTrips, cb) {
     stopMap = builder(stopName, avlId);
 
     if (stopMap[avlId] === undefined) {
-      console.log('Error: did not find ' + stopName + ' in GTFS.');
+      console.log('Error: did not find ' + stopName + ' in GTFS. AVL ID: ' + avlId);
       badCount += 1;
     }
 
