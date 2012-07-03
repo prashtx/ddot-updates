@@ -12,6 +12,7 @@ var staticData = new StaticData();
 var app = express.createServer(express.logger());
 
 express.bodyParser.parse['text/plain'] = function (req, options, callback) {
+  console.log('Got text/plain'); // XXX
   var buf = '';
   req.setEncoding('utf8');
   req.on('data', function(chunk){
@@ -81,12 +82,19 @@ function createProtobuf(adherence) {
 
   var sequence = getSequence();
 
+  var tripMissCount = 0;
+
   csv()
-  .from(adherence, {columns: false})
+  .from(adherence, {columns: false, trim: true})
   .on('data', function (data) {
     var avlTripId = data[1];
     var delay = parseInt(data[2], 10);
-    var avlStopId = data[3];
+    var avlStopId = data[3].trim();
+
+    if (staticData.tripMap[avlTripId] === undefined) {
+      console.log('Could not find AVL Trip ID: ' + avlTripId);
+      tripMissCount += 1;
+    }
 
     var feedEntity = {
       id: getEntityId(),
@@ -113,7 +121,10 @@ function createProtobuf(adherence) {
   .on('end', function (count) {
     // serialize the message
     serializedFeed = FeedMessage.serialize(feedMessage);
+    //console.log('staticData.tripMap'); // XXX
+    //console.log(JSON.stringify(staticData.tripMap, null, '  ')); // XXX
     console.log('Created GTFS-Realtime data from ' + count + ' rows of AVL data.');
+    console.log('Could not resolve ' + tripMissCount + ' AVL trip IDs.');
   });
 }
 
@@ -183,5 +194,11 @@ function startServer() {
     console.log('Listening on ' + port);
   });
 }
+
+// XXX
+process.on('uncaughtException',function(e) {
+    console.log("Caught unhandled exception: " + e);
+    console.log(" ---> : " + e.stack);
+});
 
 startServer();

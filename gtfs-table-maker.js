@@ -8,9 +8,9 @@ var csv = require('csv');
 var fs = require('fs');
 
 // TODO: The consumer of this module should pass in the fetched GTFS package.
-var STOPS_FILE = '/Users/prashant/Downloads/ddot_gtfs/stops.txt';
-var STOP_TIMES_FILE = '/Users/prashant/Downloads/ddot_gtfs/stop_times.txt';
-var TRIPS_FILE = '/Users/prashant/Downloads/ddot_gtfs/trips.txt';
+var STOPS_FILE = 'stops.txt';
+var STOP_TIMES_FILE = 'stop_times.txt';
+var TRIPS_FILE = 'trips.txt';
 
 
 function convertTimeToSec(time) {
