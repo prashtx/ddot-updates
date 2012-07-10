@@ -6,10 +6,14 @@ var express = require('express');
 var Schema = require('protobuf').Schema;
 var StaticData = require('./static-data.js').StaticData;
 var gtfsProcessor = require('./gtfs-table-maker.js');
+var Ftp = require('jsftp');
 
 var staticData = new StaticData();
 
 var app = express.createServer(express.logger());
+
+
+var MAX_AVL_AGE = 24*60*60*1000;
 
 express.bodyParser.parse['text/plain'] = function (req, options, callback) {
   console.log('Got text/plain'); // XXX
@@ -68,6 +72,27 @@ function getSequence() {
   }
 
   return sequence;
+}
+
+// Fetch the GTFS package from the FTP site
+// cb(err, data)
+function getGtfsPackage(cb) {
+  console.log('Getting GTFS package from the FTP server');
+  var ftp = new Ftp({ host: process.env.GTFS_FTP_HOST });
+  // Login
+  ftp.auth(process.env.GTFS_FTP_USERNAME,
+           process.env.GTFS_FTP_PASSWORD,
+           function (err, res) {
+    if (err) { return cb(err); }
+    // Get the GTFS zip file
+    ftp.get(process.env.GTFS_FTP_PATH, function (err, data) {
+      if (err) { return cb(err); }
+      // Disconnect
+      ftp.raw.quit(function () {
+        cb(null, data);
+      });
+    });
+  });
 }
 
 function createProtobuf(adherence) {
@@ -141,7 +166,8 @@ app.get('/gtfs-realtime/trip-updates.json', function (req, response) {
 });
 
 app.post('/adherence', function (req, response) {
-  if (staticData.tripMap && staticData.stopMap) {
+  if (staticData.tripMap && staticData.stopMap &&
+      staticData.getAvlAge() < MAX_AVL_AGE) {
     console.log('Processing adherence data');
     createProtobuf(req.body);
     response.send(JSON.stringify({needsStaticData: false}));
@@ -185,8 +211,16 @@ app.post('/post-test', function (req, response) {
 function startServer() {
   // TODO: Check the GTFS location regularly for updates. Rebuild the tables
   // when we find new GTFS data.
-  gtfsProcessor.makeGtfsTables(function (tables) {
-    staticData.setGtfsTables(tables);
+  getGtfsPackage(function (error, zipData) {
+    // TODO: if we get an error, we should retry intelligently
+    if (error) {
+      throw error;
+    }
+    // TODO: use the return value from makeGtfsTables to figure out when to
+    // check for new data.
+    gtfsProcessor.makeGtfsTables(zipData, function (tables) {
+      staticData.setGtfsTables(tables);
+    });
   });
 
   var port = process.env.PORT || 3000;
@@ -194,11 +228,5 @@ function startServer() {
     console.log('Listening on ' + port);
   });
 }
-
-// XXX
-process.on('uncaughtException',function(e) {
-    console.log("Caught unhandled exception: " + e);
-    console.log(" ---> : " + e.stack);
-});
 
 startServer();

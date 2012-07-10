@@ -6,6 +6,8 @@
   , "dependencies": {
       "express" : "2.5.8",
       "csv" : "0.0.x",
-      "protobuf" : "0.3.x"
+      "protobuf" : "0.3.x",
+      "zip" : "0.0.x",
+      "jsftp" : "0.3.x"
   }
 }

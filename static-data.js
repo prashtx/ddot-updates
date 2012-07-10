@@ -68,6 +68,10 @@ function createStopMap(builder, avlStop, cb) {
 function StaticData() {
   this.tripMap = null;
   this.stopMap = null;
+
+  this.avlTripsTimestamp = null;
+  this.avlStopsTimestamp = null;
+  this.avlTimestamp = null;
 }
 
 //StaticData.prototype = new EventEmitter();
@@ -116,6 +120,9 @@ StaticData.prototype.setAvlTrips = function (avlTrips) {
   if (this.avlStops && this.startNodeMap && this.stopNameMap) {
     this.createIdMaps();
   }
+
+  // Update the timestamp
+  this.setAvlTripsTimestamp(Date.now());
 };
 
 StaticData.prototype.setAvlStops = function (avlStops) {
@@ -132,6 +139,29 @@ StaticData.prototype.setAvlStops = function (avlStops) {
       console.log('Need the GTFS stop name map.');
     }
   }
+
+  // Update the timestamp
+  this.setAvlStopsTimestamp(Date.now());
+};
+
+StaticData.prototype.setAvlTripsTimestamp = function (ts) {
+  if (this.avlStopsTimestamp) {
+    this.avlTimestamp = ts;
+    this.avlStopsTimestamp = null;
+    this.avlTripsTimestamp = null;
+  }
+};
+
+StaticData.prototype.setAvlStopsTimestamp = function (ts) {
+  if (this.avlTripsTimestamp) {
+    this.avlTimestamp = ts;
+    this.avlStopsTimestamp = null;
+    this.avlTripsTimestamp = null;
+  }
+};
+
+StaticData.prototype.getAvlAge = function () {
+  return Date.now() - this.avlTimestamp;
 };
 
 module.exports = (function () {
