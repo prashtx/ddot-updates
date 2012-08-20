@@ -109,9 +109,12 @@ function StaticData() {
   this.tripMap = null;
   this.stopMap = null;
 
-  this.avlTripsTimestamp = null;
-  this.avlStopsTimestamp = null;
-  this.avlTimestamp = null;
+  this.avlTimestamp = 0;
+  this.timestamps = {
+    trips: null,
+    stops: null,
+    blocks: null
+  };
 }
 
 //StaticData.prototype = new EventEmitter();
@@ -232,7 +235,9 @@ StaticData.prototype.setTimestamp = function (name, ts) {
   var stopsTs = this.timestamps.stops;
   var blocksTs = this.timestamps.blocks;
 
-  if (tripsTs !== null && stopsTs !== null && blocksTs !== null) {
+  if ((this.timestamps.trips !== null) &&
+      (this.timestamps.stops !== null) &&
+      (this.timestamps.blocks !== null)) {
     this.avlTimestamp = ts;
     this.timestamps.trips = null;
     this.timestamps.stops = null;
