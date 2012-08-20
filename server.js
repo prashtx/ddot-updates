@@ -206,6 +206,7 @@ function createProtobuf(adherence) {
     serializedFeed = FeedMessage.serialize(feedMessage);
     console.log('Created GTFS-Realtime data from ' + count + ' rows of AVL data.');
     console.log('Could not resolve ' + tripMissCount + ' AVL trip IDs.');
+    console.log('Could not resolve ' + workMissCount + ' AVL work piece IDs.');
   });
 }
 
