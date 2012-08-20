@@ -281,6 +281,12 @@ app.post('/post-test', function (req, response) {
   response.send();
 });
 
+// For testing
+// Respond with JSON describing the AVL work piece ID -> trip ID mapping.
+app.get('/static-avl/work-trip-map', function (req, response) {
+  response.send(staticData.workTripMap);
+});
+
 function startServer() {
   // TODO: Check the GTFS location regularly for updates. Rebuild the tables
   // when we find new GTFS data.
