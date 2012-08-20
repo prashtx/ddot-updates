@@ -161,6 +161,8 @@ StaticData.prototype.createIdMaps = function(cb) {
 
     self.tripMap = tripMap;
 
+    console.log('Built new map from AVL trips to GTFS trips.');
+
     createWorkTripMap(blockMap, self.avlWorkBlock, function (error, map) {
       // Reset the AVL static trip data
       self.avlTrips = null;
@@ -171,6 +173,8 @@ StaticData.prototype.createIdMaps = function(cb) {
         console.log(error.message);
       } else {
         self.workTripMap = map;
+
+        console.log('Built new map from AVL work pieces to AVL trips.');
       }
     });
   });
@@ -184,6 +188,8 @@ StaticData.prototype.createIdMaps = function(cb) {
       console.log(error.message);
     } else {
       self.stopMap = map;
+
+      console.log('Built new map from AVL stops to GTFS stops.');
     }
   });
 };
