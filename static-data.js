@@ -80,7 +80,7 @@ function createStopMap(builder, avlStop, cb) {
 function createWorkTripMap(blockMap, avlWorkBlock, cb) {
   // Map work piece IDs to a set of trips
   // Each trip is an object containing an ID and an end time
-  var map;
+  var map = {};
   var count = 0;
   var badCount = 0;
   csv()
