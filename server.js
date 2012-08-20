@@ -7,6 +7,8 @@ var Schema = require('protobuf').Schema;
 var StaticData = require('./static-data.js').StaticData;
 var gtfsProcessor = require('./gtfs-table-maker.js');
 var Ftp = require('jsftp');
+var tz = require('timezone/loaded');
+var util = require('util');
 
 var staticData = new StaticData();
 
@@ -16,7 +18,6 @@ var app = express.createServer(express.logger());
 var MAX_AVL_AGE = 24*60*60*1000;
 
 express.bodyParser.parse['text/plain'] = function (req, options, callback) {
-  console.log('Got text/plain'); // XXX
   var buf = '';
   req.setEncoding('utf8');
   req.on('data', function(chunk){
@@ -49,6 +50,7 @@ var schema = new Schema(fs.readFileSync('gtfs-realtime.desc'));
 var FeedMessage = schema['transit_realtime.FeedMessage'];
 
 var serializedFeed = null;
+var tripDelays = {};
 
 var getEntityId = (function () {
   var id = 0;
@@ -108,46 +110,100 @@ function createProtobuf(adherence) {
   var sequence = getSequence();
 
   var tripMissCount = 0;
+  var workMissCount = 0;
 
   csv()
   .from(adherence, {columns: false, trim: true})
   .on('data', function (data) {
-    var avlTripId = data[1];
-    var delay = parseInt(data[2], 10);
-    var avlStopId = data[3].trim();
+    var delay = -1 * parseInt(data[1], 10);
+    var workId = data[2];
+    var timestamp = data[3];
+
+    // Make sure we got a adherence number
+    if (isNaN(delay)) {
+      return;
+    }
+
+    var potentialTrips = staticData.workTripMap[workId];
+    if (potentialTrips === undefined) {
+      console.log('Could not find trips corresponding to an AVL work piece ID: ' + workId);
+      workMissCount += 1;
+
+      return;
+    }
+
+    var posixTime = tz(timestamp);
+    var messageTime = (3600 * parseInt(tz(posixTime, '%H', 'America/Detroit'), 10)) +
+      (60 * parseInt(tz(posixTime, '%M', 'America/Detroit'), 10)) +
+      parseInt(tz(posixTime, '%S', 'America/Detroit'), 10);
+
+    // Look for the current trip. It's the one that ends the soonest, _after_
+    // the message timestamp.
+    var avlTrip = potentialTrips.reduce(function (memo, trip) {
+      // If the trip has already ended, rule it out.
+      if (trip.endTime < messageTime) {
+        return memo;
+      }
+      // If this is the only valid trip we've found, then it becomes our
+      // candidate.
+      if (memo === null) {
+        return trip;
+      }
+      // If the trip is valid and ends earlier than the ones we've seen so far,
+      // then it becomes our candidate.
+      if (trip.endTime < memo.endTime) {
+        return trip;
+      }
+      return memo;
+    }, null);
+
+    if (avlTrip === null) {
+      console.log(util.format('Could not find a trip for work piece: %s and timestamp: %s', workId, timestamp));
+      workMissCount += 1;
+
+      return;
+    }
+
+    var avlTripId = avlTrip.id;
 
     if (staticData.tripMap[avlTripId] === undefined) {
       console.log('Could not find AVL Trip ID: ' + avlTripId);
       tripMissCount += 1;
     }
 
-    var feedEntity = {
-      id: getEntityId(),
-      tripUpdate: {
-        trip: {
-          // TODO: Why is the trip ID being added as an Array?
-          //tripId: tripMap[avlTripId][sequence]
-          tripId: staticData.tripMap[avlTripId][sequence][0]
-        },
-        stopTimeUpdate: [{
-          stopId: staticData.stopMap[avlStopId],
-          arrival: {
-            delay: delay
-          }
-        }]
-      }
-    };
-
-    feedMessage.entity.push(feedEntity);
+    // TODO: Why is the trip ID being added as an Array?
+    //tripDelays[staticData.tripMap[avlTripId][sequence]] = delay;
+    tripDelays[staticData.tripMap[avlTripId][sequence][0]] = delay;
   })
   .on('error', function (error) {
     console.log(error);
   })
   .on('end', function (count) {
+    // Turn the set of delays into trip updates
+    var trip;
+    for (trip in tripDelays) {
+      if (tripDelays.hasOwnProperty(trip)) {
+        feedMessage.entity.push({
+          id: getEntityId(),
+          tripUpdate: {
+            trip: {
+              // TODO: Why is the trip ID being added as an Array?
+              //tripId: tripMap[avlTripId][sequence]
+              tripId: trip
+            },
+            stopTimeUpdate: [{
+              //stopId: staticData.stopMap[avlStopId],
+              stopSequence: 1,
+              arrival: {
+                delay: tripDelays[trip]
+              }
+            }]
+          }
+        });
+      }
+    }
     // serialize the message
     serializedFeed = FeedMessage.serialize(feedMessage);
-    //console.log('staticData.tripMap'); // XXX
-    //console.log(JSON.stringify(staticData.tripMap, null, '  ')); // XXX
     console.log('Created GTFS-Realtime data from ' + count + ' rows of AVL data.');
     console.log('Could not resolve ' + tripMissCount + ' AVL trip IDs.');
   });
@@ -175,6 +231,11 @@ app.post('/adherence', function (req, response) {
     // Indicate that we need the static AVL data payload
     response.send(JSON.stringify({needsStaticData: true}));
   }
+});
+
+app.post('/static-avl/blocks', function (req, response) {
+  staticData.setAvlBlocks(req.body);
+  response.send();
 });
 
 app.post('/static-avl/trips', function (req, response) {

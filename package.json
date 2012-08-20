@@ -8,6 +8,7 @@
       "csv" : "0.0.x",
       "protobuf" : "https://github.com/prashtx/protobuf/tarball/lib-location",
       "zip" : "0.0.x",
-      "jsftp" : "0.3.x"
+      "jsftp" : "0.3.x",
+      "timezone" : "0.0.x"
   }
 }

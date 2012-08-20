@@ -3,9 +3,10 @@
 var converter = require('./avl-gtfs-converter.js');
 var csv = require('csv');
 
-// cb(tripMap, error)
+// cb(error, tripMap)
 function createTripMap(builder, avlTrips, cb) {
   var tripMap = null;
+  var blockMap = {};
   var goodCount = 0;
   var count = 0;
   csv()
@@ -16,23 +17,34 @@ function createTripMap(builder, avlTrips, cb) {
     var endNode = data[2].trim();
     var endTime = data[1].trim();
     var avlTripId = data[0];
+    var blockId = data[4].trim();
 
     tripMap = builder(avlTripId, startNode, endNode, endTime);
 
     if (tripMap[avlTripId] !== undefined) {
       goodCount += 1;
     }
+
+    var trips = blockMap[blockId];
+    if (trips === undefined) {
+      trips = [];
+      blockMap[blockId] = trips;
+    }
+    trips.push({
+      id: avlTripId,
+      endTime: endTime
+    });
   })
   .on('end', function (count) {
     console.log('Successfully mapped ' + goodCount + ' trips out of ' + count);
-    cb(tripMap);
+    cb(null, tripMap, blockMap);
   })
   .on('error', function (error) {
-    cb(null, error);
+    cb(error);
   });
 }
 
-// cb(tripMap, error)
+// cb(error, stopMap)
 function createStopMap(builder, avlStop, cb) {
   var stopMap = null;
   var count = 0;
@@ -57,10 +69,38 @@ function createStopMap(builder, avlStop, cb) {
     console.log('Processed ' + count + ' stops from AVL.');
     console.log('Found ' + badCount + ' that did not match GTFS stop names.');
 
-    cb(stopMap);
+    cb(null, stopMap);
   })
   .on('error', function (error) {
-    cb(null, error);
+    cb(error);
+  });
+}
+
+// cb(error, workBlockMap)
+function createWorkTripMap(blockMap, avlWorkBlock, cb) {
+  // Map work piece IDs to a set of trips
+  // Each trip is an object containing an ID and an end time
+  var map;
+  var count = 0;
+  var badCount = 0;
+  csv()
+  .from(avlWorkBlock, {columns: false, trim: true})
+  .on('data', function (data, index) {
+    map[data[0]] = blockMap[data[1]];
+    count += 1;
+    if (map[data[0]] === undefined) {
+      badCount += 1;
+    }
+  })
+  .on('end', function (count) {
+    console.log('');
+    console.log('Processed ' + count + ' work piece IDs from AVL.');
+    console.log('Found ' + badCount + ' that did not match block IDs from the AVL trips table.');
+
+    cb(null, map);
+  })
+  .on('error', function (error) {
+    cb(error);
   });
 }
 
@@ -77,24 +117,63 @@ function StaticData() {
 //StaticData.prototype = new EventEmitter();
 StaticData.prototype = {};
 
+// Check if we've created all of the necessary data to understand the regular AVL updates
+StaticData.prototype.hasCompleteData = function () {
+  // XXX
+  if (!this.avlTrips) {
+    console.log('Need static trip info.');
+  }
+  if (!this.startNodeMap) {
+    console.log('Need the GTFS start node map.');
+  }
+  if (!this.stopNameMap) {
+    console.log('Need the GTFS stop name map.');
+  }
+  if (!this.avlBlocks) {
+    console.log('Need the map from work piece ID to block ID');
+  }
+  if (!this.avlStops) {
+    console.log('Need static stop info');
+  }
+  // XXX
+
+  return (this.avlStops !== null &&
+          this.avlTrips !== null &&
+          this.avlBlocks !== null &&
+          this.startNodeMap !== null &&
+          this.stopNameMap !== null);
+};
+
 // create tripMap and stopMap
 StaticData.prototype.createIdMaps = function(cb) {
   var self = this;
 
   var tripMapBuilder = converter.getTripMapBuilder(self.startNodeMap);
-  createTripMap(tripMapBuilder, self.avlTrips, function (map, error) {
-    // Reset the AVL static trip data
-    self.avlTrips = null;
+  createTripMap(tripMapBuilder, self.avlTrips, function (error, tripMap, blockMap) {
 
     if (error) {
       console.log(error.message);
-    } else {
-      self.tripMap = map;
+      return;
     }
+
+    self.tripMap = tripMap;
+
+    createWorkTripMap(blockMap, self.avlWorkBlock, function (error, map) {
+      // Reset the AVL static trip data
+      self.avlTrips = null;
+      // Reset the AVL work piece/block data
+      self.avlBlocks = null;
+
+      if (error) {
+        console.log(error.message);
+      } else {
+        self.workTripMap = map;
+      }
+    });
   });
 
   var stopMapBuilder = converter.getStopMapBuilder(self.stopNameMap);
-  createStopMap(stopMapBuilder, self.avlStops, function (map, error) {
+  createStopMap(stopMapBuilder, self.avlStops, function (error, map) {
     // Reset the AVL static stop data
     self.avlStops = null;
 
@@ -110,53 +189,54 @@ StaticData.prototype.setGtfsTables = function (tables) {
   this.startNodeMap = tables.startNodeMap;
   this.stopNameMap = tables.stopNameMap;
 
-  if (this.avlTrips && this.avlStops) {
+  if (this.hasCompleteData()) {
     this.createIdMaps();
   }
 };
 
 StaticData.prototype.setAvlTrips = function (avlTrips) {
   this.avlTrips = avlTrips;
-  if (this.avlStops && this.startNodeMap && this.stopNameMap) {
+  if (this.hasCompleteData()) {
     this.createIdMaps();
   }
 
   // Update the timestamp
-  this.setAvlTripsTimestamp(Date.now());
+  this.setTimestamp('trips', Date.now());
 };
 
 StaticData.prototype.setAvlStops = function (avlStops) {
   this.avlStops = avlStops;
   console.log('Got AVL static stop info.');
-  if (this.avlTrips && this.startNodeMap && this.stopNameMap) {
+  if (this.hasCompleteData()) {
     this.createIdMaps();
-  } else {
-    if (!this.avlTrips) {
-      console.log('Need static trip info.');
-    } else if (!this.startNodeMap) {
-      console.log('Need the GTFS start node map.');
-    } else if (!this.stopNameMap) {
-      console.log('Need the GTFS stop name map.');
-    }
   }
 
   // Update the timestamp
-  this.setAvlStopsTimestamp(Date.now());
+  this.setTimestamp('stops', Date.now());
 };
 
-StaticData.prototype.setAvlTripsTimestamp = function (ts) {
-  if (this.avlStopsTimestamp) {
-    this.avlTimestamp = ts;
-    this.avlStopsTimestamp = null;
-    this.avlTripsTimestamp = null;
+StaticData.prototype.setAvlBlocks = function (avlBlocks) {
+  this.avlBlocks = avlBlocks;
+
+  if (this.hasCompleteData()) {
+    this.createIdMaps();
   }
+
+  // Update the timestamp
+  this.setTimestamp('blocks', Date.now());
 };
 
-StaticData.prototype.setAvlStopsTimestamp = function (ts) {
-  if (this.avlTripsTimestamp) {
+StaticData.prototype.setTimestamp = function (name, ts) {
+  this.timestamps[name] = ts;
+  var tripsTs = this.timestamps.trips;
+  var stopsTs = this.timestamps.stops;
+  var blocksTs = this.timestamps.blocks;
+
+  if (tripsTs !== null && stopsTs !== null && blocksTs !== null) {
     this.avlTimestamp = ts;
-    this.avlStopsTimestamp = null;
-    this.avlTripsTimestamp = null;
+    this.timestamps.trips = null;
+    this.timestamps.stops = null;
+    this.timestamps.blocks = null;
   }
 };
 
