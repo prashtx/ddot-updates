@@ -170,7 +170,7 @@ StaticData.prototype.createIdMaps = function(cb) {
 
     console.log('Built new map from AVL trips to GTFS trips.');
 
-    createWorkTripMap(blockMap, self.avlWorkBlock, function (error, map) {
+    createWorkTripMap(blockMap, self.avlBlocks, function (error, map) {
       // Reset the AVL static trip data
       self.avlTrips = null;
       // Reset the AVL work piece/block data
