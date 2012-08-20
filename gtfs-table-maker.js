@@ -5,12 +5,11 @@
  * We only need to run this once for each GTFS package.
  */
 var csv = require('csv');
-var fs = require('fs');
+var zip = require('zip');
 
-// TODO: The consumer of this module should pass in the fetched GTFS package.
-var STOPS_FILE = 'stops.txt';
-var STOP_TIMES_FILE = 'stop_times.txt';
-var TRIPS_FILE = 'trips.txt';
+var stopsCSV;
+var stopTimesCSV;
+var tripsCSV;
 
 
 function convertTimeToSec(time) {
@@ -25,7 +24,7 @@ function processStops(cb) {
   var stop_id_name = {};
 
   csv()
-  .fromPath(STOPS_FILE, {columns: true})
+  .from(stopsCSV, {columns: true})
   .on('data', function (data, index) {
     stop_id_name[data.stop_id] = data.stop_name;
   })
@@ -38,7 +37,7 @@ function processStops(cb) {
 function processStopTimes(stop_id_name, cb) {
   var trips = {};
   csv()
-  .fromPath(STOP_TIMES_FILE, {columns: true})
+  .from(stopTimesCSV, {columns: true})
   .on('data', function (data, index) {
     var trip = trips[data.trip_id];
     var stopSeq = parseInt(data.stop_sequence, 10);
@@ -71,7 +70,7 @@ function processStopTimes(stop_id_name, cb) {
 function processServiceIds(trips, cb) {
   console.log('Processing service IDs.');
   csv()
-  .fromPath(TRIPS_FILE, {columns: true})
+  .from(tripsCSV, {columns: true})
   .on('data', function (data, index) {
     trips[data.trip_id].service_id = data.service_id;
   })
@@ -83,7 +82,7 @@ function processServiceIds(trips, cb) {
 function processBlockIds(trips, cb) {
   console.log('Processing block IDs.');
   csv()
-  .fromPath(TRIPS_FILE, {columns: true})
+  .from(tripsCSV, {columns: true})
   .on('data', function (data, index) {
     trips[data.trip_id].block_id = data.block_id;
   })
@@ -169,7 +168,7 @@ function handleStops(cb) {
   console.log('Processing stops.');
 
   csv()
-  .fromPath(STOPS_FILE, {columns: true})
+  .from(stopsCSV, {columns: true})
   .on('data', function (data, index) {
     stopNameMap[data.stop_name.trim().toLocaleLowerCase()] = data.stop_id;
   })
@@ -178,11 +177,25 @@ function handleStops(cb) {
   });
 }
 
+function readGtfsPackage(zipData) {
+  var data = zip.Reader(zipData).toObject('utf-8');
+
+  stopsCSV = data['stops.txt'];
+  stopTimesCSV = data['stop_times.txt'];
+  tripsCSV = data['trips.txt'];
+
+  // Return the end date, so we know when to check for new GTFS data
+  return new Date(2012, 7, 31); // XXX
+}
+
 
 module.exports = (function () {
   var self = {};
 
-  self.makeGtfsTables = function (cb) {
+  self.makeGtfsTables = function (zipData, cb) {
+    // Read in the relevant GTFS data
+    var endDate = readGtfsPackage(zipData);
+
     handleTrips(function(startNodeMap) {
       handleStops(function(stopNameMap) {
         var gtfsTables = {
@@ -192,6 +205,8 @@ module.exports = (function () {
         cb(gtfsTables);
       });
     });
+
+    return endDate;
   };
 
   return self;
