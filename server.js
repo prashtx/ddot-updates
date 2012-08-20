@@ -222,12 +222,23 @@ app.get('/gtfs-realtime/trip-updates.json', function (req, response) {
 });
 
 app.post('/adherence', function (req, response) {
-  if (staticData.tripMap && staticData.stopMap &&
+  if (staticData.tripMap && staticData.workTripMap &&
       staticData.getAvlAge() < MAX_AVL_AGE) {
     console.log('Processing adherence data');
     createProtobuf(req.body);
     response.send(JSON.stringify({needsStaticData: false}));
   } else {
+    // XXX
+    if (staticData.getAvlAge() >= MAX_AVL_AGE) {
+      console.log('Static AVL data is too old.');
+    }
+    if (!staticData.tripMap) {
+      console.log('We have no trip map.');
+    }
+    if (!staticData.workTripMap) {
+      console.log('We have no map from work piece to AVL trips.');
+    }
+    // XXX
     // Indicate that we need the static AVL data payload
     response.send(JSON.stringify({needsStaticData: true}));
   }
