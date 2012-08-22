@@ -10,6 +10,9 @@ var Ftp = require('jsftp');
 var tz = require('timezone/loaded');
 var util = require('util');
 
+// Determines if we enable an HTML site for testing the data.
+var useTestSite = process.env.TEST_SITE;
+
 var staticData = new StaticData();
 
 var app = express.createServer(express.logger());
@@ -286,6 +289,12 @@ app.post('/post-test', function (req, response) {
 app.get('/static-avl/work-trip-map', function (req, response) {
   response.send(staticData.workTripMap);
 });
+
+if (useTestSite) {
+  // Enable the test site
+  console.log('Enabled HTML test site');
+  app.use(express['static']('./public'));
+}
 
 function startServer() {
   // TODO: Check the GTFS location regularly for updates. Rebuild the tables
