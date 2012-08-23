@@ -118,7 +118,8 @@ function createProtobuf(adherence) {
   csv()
   .from(adherence, {columns: false, trim: true})
   .on('data', function (data) {
-    var delay = -1 * parseInt(data[1], 10);
+    // Convert minutes of adherence to seconds of delay
+    var delay = -60 * parseInt(data[1], 10);
     var workId = data[2];
     var timestamp = data[3];
 
