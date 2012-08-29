@@ -83,16 +83,9 @@ function createWorkTripMap(blockMap, avlWorkBlock, cb) {
   var map = {};
   var count = 0;
   var badCount = 0;
-  // XXX
-  console.log('AVL Work-Block raw data:');
-  console.log(avlWorkBlock);
-  // XXX
   csv()
   .from(avlWorkBlock, {columns: false, trim: true})
   .on('data', function (data, index) {
-    // XXX
-    console.log('data[0]: ' + data[0] + ', data[1]: ' + data[1] + ', blockMap[data[1]]: ' + blockMap[data[1]]);
-    // XXX
     map[data[0]] = blockMap[data[1]];
     count += 1;
     if (map[data[0]] === undefined) {
