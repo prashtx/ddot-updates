@@ -5125,8 +5125,12 @@ window.trips = {
       });
       $('#trip-list .items').html('');
       var template = $('#t-item').html();
-      u.each(updates, function (item) {
-        $('#trip-list .items').append($(u.template(template, item)));
+      u.each(updates, function (item, index) {
+        $('#trip-list .items').append($(u.template(template, {
+          index: (index + 1) + '.',
+          trip: item.trip,
+          adherence: item.adherence
+        })));
       });
     }).fail(function (reason) {
     });

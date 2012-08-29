@@ -456,7 +456,13 @@ td {
   background: #C2F2F0;
 }
 .list .items .item {
-  width: 400px;
+  width: 460px;
+}
+.num {
+  display: inline-block;
+  width: 50px;
+  padding: 5px 5px 5px 5px;
+  text-align: left;
 }
 .trip {
   display: inline-block;

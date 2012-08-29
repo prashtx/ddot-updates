@@ -31,6 +31,7 @@
     <button id="refresh">Refresh</button>
     <div id="trip-list" class="list">
       <div class="header">
+        <div class="num"></div>
         <div class="trip">Trip</div>
         <div class="adherence">Adherence</div>
       </div>
@@ -51,6 +52,7 @@
     <!-- Templates -->
     <script type="text/template" id="t-item">
       <div class="item">
+        <div class="num"><%= index %></div>
         <div class="trip"><%= trip %></div>
         <div class="adherence"><%= adherence %></div>
       </div>
