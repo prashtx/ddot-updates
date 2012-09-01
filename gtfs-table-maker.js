@@ -6,10 +6,15 @@
  */
 var csv = require('csv');
 var zip = require('zip');
+var Q = require('q');
+var util = require('util');
+var tz = require('timezone/loaded');
 
 var stopsCSV;
 var stopTimesCSV;
 var tripsCSV;
+var calendarCSV;
+var calendarDatesCSV;
 
 
 function convertTimeToSec(time) {
@@ -28,10 +33,12 @@ function processStops(cb) {
   .on('data', function (data, index) {
     stop_id_name[data.stop_id] = data.stop_name;
   })
-  .on('end', function (error) {
+  .on('end', function (count) {
     cb(stop_id_name);
+  })
+  .on('error', function (error) {
+    throw error;
   });
-
 }
 
 function processStopTimes(stop_id_name, cb) {
@@ -62,8 +69,11 @@ function processStopTimes(stop_id_name, cb) {
       }
     }
   })
-  .on('end', function (error) {
+  .on('end', function (count) {
     cb(trips);
+  })
+  .on('error', function (error) {
+    throw error;
   });
 }
 
@@ -76,6 +86,9 @@ function processServiceIds(trips, cb) {
   })
   .on('end', function (error) {
     cb(trips);
+  })
+  .on('error', function (error) {
+    throw error;
   });
 }
 
@@ -86,8 +99,11 @@ function processBlockIds(trips, cb) {
   .on('data', function (data, index) {
     trips[data.trip_id].block_id = data.block_id;
   })
-  .on('end', function (error) {
+  .on('end', function (count) {
     cb(trips);
+  })
+  .on('error', function (error) {
+    throw error;
   });
 }
 
@@ -150,20 +166,24 @@ function processTrips(trips, cb) {
   cb(startNodeMap);
 }
 
-function handleTrips(cb) {
+// TODO: handle exceptions
+function handleTrips() {
+  var def = Q.defer();
   processStops(function (stops) {
     processStopTimes(stops, function (trips) {
       processServiceIds(trips, function (trips) {
         processTrips(trips, function (startNodeMap) {
-          cb(startNodeMap);
+          def.resolve(startNodeMap);
         });
       });
     });
   });
+  return def.promise;
 }
 
-function handleStops(cb) {
+function handleStops() {
   var stopNameMap = {};
+  var def = Q.defer();
 
   console.log('Processing stops.');
 
@@ -172,8 +192,86 @@ function handleStops(cb) {
   .on('data', function (data, index) {
     stopNameMap[data.stop_name.trim().toLocaleLowerCase()] = data.stop_id;
   })
-  .on('end', function (error) {
-    cb(stopNameMap);
+  .on('end', function (count) {
+    def.resolve(stopNameMap);
+  })
+  .on('error', function (error) {
+    def.reject(error);
+  });
+
+  return def.promise;
+}
+
+// Returns a promise for an object that maps day of week (Sunday = '0') to
+// service ID
+// This processes very simple calendar.txt files.
+function processCalendar() {
+  console.log('Processing calendar.');
+  var def = Q.defer();
+  var days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  var baseCalendar = {};
+
+  csv()
+  .from(calendarCSV, {columns: true})
+  .on('data', function (data, index) {
+    var i;
+    for (i = 0; i < days.length; i += 1) {
+      if (data[days[i]] === '1') {
+        baseCalendar[i] = parseInt(data.service_id, 10);
+      }
+    }
+  })
+  .on('end', function (count) {
+    def.resolve(baseCalendar);
+  })
+  .on('error', function (error) {
+    def.reject(error);
+  });
+
+  return def.promise;
+}
+
+// Returns a promise for a function that maps a date (as POSIX time) to service
+// ID
+function processExceptions(dayToSequence) {
+  console.log('Processing calendar exceptions.');
+  var def = Q.defer();
+  var exceptions = {};
+
+  csv()
+  .from(calendarDatesCSV, {columns: true})
+  .on('data', function (data, index) {
+    if (data.exception_type === '1') {
+      exceptions[data.date] = parseInt(data.service_id, 10);
+    }
+  })
+  .on('end', function (count) {
+    var dateToServiceID = function (time) {
+      // TODO: handle transit time, in which 12.30 AM is considered part of
+      // the previous calendar day.
+      // Put date into YYYMMDD format
+      var date = tz(time, '%Y%m%d', 'America/Detroit');
+      var serviceID = exceptions[date];
+      if (serviceID !== undefined) {
+        return serviceID;
+      }
+      // Get the day of the week. Sunday = '0'.
+      var day = tz(time, '%w', 'America/Detroit');
+      return dayToSequence[day];
+    };
+    def.resolve(dateToServiceID);
+  })
+  .on('error', function (error) {
+    def.reject(error);
+  });
+
+  return def.promise;
+}
+
+function handleCalendar() {
+  return processCalendar()
+  .then(function (dayToSequence) {
+    return processExceptions(dayToSequence);
   });
 }
 
@@ -183,6 +281,8 @@ function readGtfsPackage(zipData) {
   stopsCSV = data['stops.txt'];
   stopTimesCSV = data['stop_times.txt'];
   tripsCSV = data['trips.txt'];
+  calendarCSV = data['calendar.txt'];
+  calendarDatesCSV = data['calendar_dates.txt'];
 
   // Return the end date, so we know when to check for new GTFS data
   return new Date(2012, 7, 31); // XXX
@@ -196,13 +296,15 @@ module.exports = (function () {
     // Read in the relevant GTFS data
     var endDate = readGtfsPackage(zipData);
 
-    handleTrips(function(startNodeMap) {
-      handleStops(function(stopNameMap) {
-        var gtfsTables = {
-          startNodeMap: startNodeMap,
-          stopNameMap: stopNameMap
-        };
-        cb(gtfsTables);
+    Q.all([
+      handleTrips(),
+      handleStops(),
+      handleCalendar()
+    ]).spread(function (startNodeMap, stopNameMap, calendar) {
+      cb({
+        startNodeMap: startNodeMap,
+        stopNameMap: stopNameMap,
+        calendar: calendar
       });
     });
 

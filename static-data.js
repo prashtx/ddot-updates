@@ -13,11 +13,11 @@ function createTripMap(builder, avlTrips, cb) {
   .from(avlTrips, {columns: false, trim: true})
   .on('data', function (data, index) {
     count += 1;
-    var startNode = data[3].trim();
-    var endNode = data[2].trim();
-    var endTime = data[1].trim();
+    var startNode = data[3];
+    var endNode = data[2];
+    var endTime = data[1];
     var avlTripId = data[0];
-    var blockId = data[4].trim();
+    var blockId = data[4];
 
     tripMap = builder(avlTripId, startNode, endNode, endTime);
 
@@ -53,7 +53,7 @@ function createStopMap(builder, avlStop, cb) {
   .from(avlStop, {columns: false, trim: true})
   .on('data', function (data, index) {
     var avlId = data[0];
-    var stopName = data[1].trim().toLocaleLowerCase();
+    var stopName = data[1].toLocaleLowerCase();
 
     stopMap = builder(stopName, avlId);
 
@@ -132,6 +132,9 @@ StaticData.prototype.hasCompleteData = function () {
   if (!this.stopNameMap) {
     console.log('Need the GTFS stop name map.');
   }
+  if (!this.calendar) {
+    console.log('Need the GTFS calendar function.');
+  }
   if (!this.avlBlocks) {
     console.log('Need the map from work piece ID to block ID');
   }
@@ -144,7 +147,8 @@ StaticData.prototype.hasCompleteData = function () {
           this.avlTrips !== null &&
           this.avlBlocks !== null &&
           this.startNodeMap !== null &&
-          this.stopNameMap !== null);
+          this.stopNameMap !== null &&
+          this.calendar !== null);
 };
 
 // create tripMap and stopMap
@@ -197,6 +201,8 @@ StaticData.prototype.createIdMaps = function(cb) {
 StaticData.prototype.setGtfsTables = function (tables) {
   this.startNodeMap = tables.startNodeMap;
   this.stopNameMap = tables.stopNameMap;
+  // Calendar is really a function, not a table.
+  this.calendar = tables.calendar;
 
   if (this.hasCompleteData()) {
     this.createIdMaps();
