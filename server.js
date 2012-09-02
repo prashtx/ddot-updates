@@ -9,18 +9,35 @@ var gtfsProcessor = require('./gtfs-table-maker.js');
 var Ftp = require('jsftp');
 var tz = require('timezone/loaded');
 var util = require('util');
+var http = require('http');
 
 // Determines if we enable an HTML site for testing the data.
 var useTestSite = process.env.TEST_SITE;
 
 var staticData = new StaticData();
 
-var app = express.createServer(express.logger());
+var app = express();
+var server = http.createServer(app);
 
 
 var MAX_AVL_AGE = 24*60*60*1000;
 
-express.bodyParser.parse['text/plain'] = function (req, options, callback) {
+app.use(express.logger());
+//express.bodyParser.parse['text/plain'] = function (req, options, callback) {
+function textParser(req, res, next) {
+  if (req._body) { return next(); }
+  req.body = req.body || {};
+
+  // For GET/HEAD, there's no body to parse.
+  if ('GET' === req.method || 'HEAD' === req.method) { return next(); }
+
+  // Check for text/plain content type
+  var type = req.headers['content-type'];
+  if (type === undefined || 'text/plain' !== type.split(';')[0]) { return next(); }
+
+  // Flag as parsed
+  req._body = true;
+
   var buf = '';
   req.setEncoding('utf8');
   req.on('data', function(chunk){
@@ -33,12 +50,15 @@ express.bodyParser.parse['text/plain'] = function (req, options, callback) {
       } else {
         req.body = buf;
       }
-      callback();
+      next();
     } catch (err) {
-      callback(err);
+      err.status = 400;
+      next(err);
     }
   });
-};
+}
+
+app.use(textParser);
 
 app.configure(function () {
   app.use(function (req, res, next) {
@@ -62,22 +82,6 @@ var getEntityId = (function () {
     return id;
   };
 }());
-
-function getSequence() {
-  var sequence = 1;
-  // TODO: The sequence should be based on a transit-day in Detroit time, not a
-  // clock-day in UTC or server time.
-  var today = (new Date()).getDay();
-  if (today >= 1 && today <= 5) {
-    sequence = 1;
-  } else if (today === 6) {
-    sequence = 2;
-  } else if (today === 0) {
-    sequence = 3;
-  }
-
-  return sequence;
-}
 
 // Fetch the GTFS package from the FTP site
 // cb(err, data)
@@ -110,7 +114,7 @@ function createProtobuf(adherence) {
     entity: []
   };
 
-  var sequence = getSequence();
+  var sequence = staticData.calendar(Date.now());
 
   var tripMissCount = 0;
   var workMissCount = 0;
@@ -291,6 +295,15 @@ app.get('/static-avl/work-trip-map', function (req, response) {
   response.send(staticData.workTripMap);
 });
 
+// Respond with the sequence ID/service ID
+app.get('/test/sequence', function (req, response) {
+  var time = parseInt(req.query.time, 10);
+  if (time === undefined || isNaN(time)) {
+    time = Date.now();
+  }
+  response.send({sequence: staticData.calendar(time)});
+});
+
 if (useTestSite) {
   // Enable the test site
   console.log('Enabled HTML test site');
@@ -313,7 +326,7 @@ function startServer() {
   });
 
   var port = process.env.PORT || 3000;
-  app.listen(port, function () {
+  server.listen(port, function () {
     console.log('Listening on ' + port);
   });
 }
