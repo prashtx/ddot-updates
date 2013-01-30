@@ -82,7 +82,9 @@ function processServiceIds(trips, cb) {
   csv()
   .from(tripsCSV, {columns: true})
   .on('data', function (data, index) {
-    trips[data.trip_id].service_id = data.service_id;
+    if (trips[data.trip_id] !== undefined) {
+      trips[data.trip_id].service_id = data.service_id;
+    }
   })
   .on('end', function (error) {
     cb(trips);
@@ -97,7 +99,9 @@ function processBlockIds(trips, cb) {
   csv()
   .from(tripsCSV, {columns: true})
   .on('data', function (data, index) {
-    trips[data.trip_id].block_id = data.block_id;
+    if (trips[data.trip_id] !== undefined) {
+      trips[data.trip_id].block_id = data.block_id;
+    }
   })
   .on('end', function (count) {
     cb(trips);
