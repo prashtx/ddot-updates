@@ -72,7 +72,14 @@ app.configure(function () {
 var schema = new Schema(fs.readFileSync('gtfs-realtime.desc'));
 var FeedMessage = schema['transit_realtime.FeedMessage'];
 
-var serializedFeed = null;
+var serializedFeed = FeedMessage.serialize({
+  header: {
+    gtfsRealtimeVersion: 1,
+    incrementality: 2,
+    timestamp: Date.now()
+  },
+  entity: []
+});
 var tripDelays = {};
 
 var getEntityId = (function () {
