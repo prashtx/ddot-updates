@@ -8,7 +8,7 @@
   "dependencies": {
     "express": "~3.0.0",
     "csv": "0.0.x",
-    "protobuf": "https://github.com/prashtx/protobuf/tarball/lib-location",
+    "protobuf": "~0.8.0",
     "zip": "0.0.x",
     "timezone": "~0.0.21",
     "q": "0.8.x",
