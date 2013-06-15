@@ -6,7 +6,7 @@ var express = require('express');
 var Schema = require('protobuf').Schema;
 var StaticData = require('./static-data.js').StaticData;
 var gtfsProcessor = require('./gtfs-table-maker.js');
-var Ftp = require('jsftp');
+var request = require('request');
 var tz = require('timezone/loaded');
 var util = require('util');
 var http = require('http');
@@ -93,21 +93,14 @@ var getEntityId = (function () {
 // Fetch the GTFS package from the FTP site
 // cb(err, data)
 function getGtfsPackage(cb) {
-  console.log('Getting GTFS package from the FTP server');
-  var ftp = new Ftp({ host: process.env.GTFS_FTP_HOST });
-  // Login
-  ftp.auth(process.env.GTFS_FTP_USERNAME,
-           process.env.GTFS_FTP_PASSWORD,
-           function (err, res) {
-    if (err) { return cb(err); }
-    // Get the GTFS zip file
-    ftp.get(process.env.GTFS_FTP_PATH, function (err, data) {
-      if (err) { return cb(err); }
-      // Disconnect
-      ftp.raw.quit(function () {
-        cb(null, data);
-      });
-    });
+  console.log('Getting GTFS package');
+  request.get({
+    url: process.env.GTFS_URL
+  }, function (error, response, body) {
+    if (error) {
+      return cb(error);
+    }
+    cb(null, body);
   });
 }
 

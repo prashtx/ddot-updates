@@ -5,16 +5,13 @@ This service receives updates from the DDOT Automatic Vehicle Location (AVL) sys
 
 The service receives 3 basic sets of information from 2 sources:
 
-- the static GTFS package is fetched via FTP
+- the static GTFS package is fetched via HTTP
 - static data from the AVL system is posted by a separate tool on the same network as the AVL database
 - live adherence data from the AVL system is posted by the same tool
 
-We use the following environment variables for the FTP transaction:
+We use the following environment variable for the HTTP transaction:
 
-- `GTFS_FTP_HOST` : the FTP server
-- `GTFS_FTP_PATH` : the path for the GTFS package at the FTP server
-- `GTFS_FTP_USERNAME` : the username
-- `GTFS_FTP_PASSWORD` : the password
+- `GTFS_URL` : the HTTP URL of the GTFS ZIP file
 
 For example, you might host your latest GTFS package on a server called `data.mytransitagency.gov` at the path `/transit/static/gtfs.zip` accessible by the user `transitbot` with the password `supers3cr3t`.
 
