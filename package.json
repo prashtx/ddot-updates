@@ -13,8 +13,5 @@
     "timezone": "~0.0.21",
     "q": "0.8.x",
     "request": "~2.21.0"
-  },
-  "devDependencies": {
-    "protobuf": "~0.8.0"
   }
 }
