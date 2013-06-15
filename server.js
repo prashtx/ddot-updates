@@ -95,7 +95,8 @@ var getEntityId = (function () {
 function getGtfsPackage(cb) {
   console.log('Getting GTFS package');
   request.get({
-    url: process.env.GTFS_URL
+    url: process.env.GTFS_URL,
+    encoding: null
   }, function (error, response, body) {
     if (error) {
       return cb(error);
